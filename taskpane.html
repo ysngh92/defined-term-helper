@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Defined Term Helper</title>
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 12px; }
+      .term { font-weight: 700; margin-bottom: 8px; }
+      .def { white-space: pre-wrap; line-height: 1.35; }
+      .muted { color: #666; font-size: 12px; }
+      button { padding: 8px 10px; margin: 10px 0; }
+      .box { border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
+    </style>
+  </head>
+  <body>
+    <h3>Defined Term Helper</h3>
+
+    <button id="refresh">Build / Refresh Definitions</button>
+    <div class="muted">Select a term in the document to see its definition here.</div>
+
+    <div class="box" style="margin-top:10px;">
+      <div class="term" id="term">—</div>
+      <div class="def" id="definition">—</div>
+    </div>
+
+    <script src="./taskpane.js"></script>
+  </body>
+</html>
