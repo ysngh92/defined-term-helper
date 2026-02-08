@@ -5,7 +5,6 @@ let GLOSSARY = null; // { direct: {}, xref: {}, paraTexts: [] }
 Office.onReady(() => {
   document.getElementById("refresh").addEventListener("click", buildGlossary);
 
-  // Update when the user changes selection
   Office.context.document.addHandlerAsync(
     Office.EventType.DocumentSelectionChanged,
     onSelectionChanged
@@ -28,7 +27,7 @@ async function buildGlossary() {
 }
 
 async function onSelectionChanged() {
-  if (!GLOSSARY) return; // user must click refresh first
+  if (!GLOSSARY) return;
 
   await Word.run(async (context) => {
     const selection = context.document.getSelection();
@@ -37,7 +36,6 @@ async function onSelectionChanged() {
 
     const rawSelected = cleanText(selection.text || "");
     const selectedKey = normalizeTerm(rawSelected);
-
     if (!selectedKey) return;
 
     const candidates = unique([selectedKey, singularize(selectedKey)].filter(Boolean));
@@ -50,17 +48,16 @@ async function onSelectionChanged() {
       }
     }
 
-    // 2) Cross-reference: look for embedded definition paragraph
+    // 2) Cross-reference: find embedded definition paragraph anywhere
     for (const key of candidates) {
       if (GLOSSARY.xref[key]) {
         const clauseRef = GLOSSARY.xref[key].clauseRef;
         const hit = findEmbeddedDefinitionParagraphAndExtract(GLOSSARY.paraTexts, key);
 
-        if (hit) {
-          setUI(rawSelected, hit);
-        } else {
-          setUI(rawSelected, `No embedded definition found (cross-ref: clause ${clauseRef}).`);
-        }
+        setUI(
+          rawSelected,
+          hit ? hit : `No embedded definition found (cross-ref: clause ${clauseRef}).`
+        );
         return;
       }
     }
@@ -74,13 +71,18 @@ function setUI(term, definition) {
   document.getElementById("definition").textContent = definition || "—";
 }
 
-/* =========================================================
-  function extractDefsFromParagraphs(paragraphTexts) {
+/* ===========================
+   Helpers (ported from Script Lab)
+=========================== */
+
+function extractDefsFromParagraphs(paragraphTexts) {
   const direct = {};
   const xref = {};
 
-  const directRe = /^"([^"]+)"\s+(means|shall mean|includes|shall include|has the following meaning)\s+(.+?)\s*[.;:]?\s*$/i;
-  const xrefRe = /^"([^"]+)"\s+has the meaning\s+(given in|set out in|set forth in)\s+clause\s+([0-9]+(?:\.[0-9]+)*)\b.*\s*[.;:]?\s*$/i;
+  const directRe =
+    /^"([^"]+)"\s+(means|shall mean|includes|shall include|has the following meaning)\s+(.+?)\s*[.;:]?\s*$/i;
+  const xrefRe =
+    /^"([^"]+)"\s+has the meaning\s+(given in|set out in|set forth in)\s+clause\s+([0-9]+(?:\.[0-9]+)*)\b.*\s*[.;:]?\s*$/i;
 
   for (const raw of paragraphTexts) {
     const t = cleanText(raw);
@@ -102,11 +104,6 @@ function setUI(term, definition) {
   return { direct, xref };
 }
 
-/* ===========================
-   Embedded definition extraction (NEW)
-   Return the phrase immediately before (an "Term") rather than whole paragraph
-=========================== */
-
 function findEmbeddedDefinitionParagraphAndExtract(paragraphTexts, termKey) {
   for (let i = 0; i < paragraphTexts.length; i++) {
     const p = cleanText(paragraphTexts[i] || "");
@@ -119,7 +116,6 @@ function findEmbeddedDefinitionParagraphAndExtract(paragraphTexts, termKey) {
 }
 
 function extractMeaningFromParentheticalSentence(paragraph, termKey) {
-  // Find a parenthetical that contains the term
   const parenRe = /\(([^)]+)\)/g;
   let m;
 
@@ -133,17 +129,10 @@ function extractMeaningFromParentheticalSentence(paragraph, termKey) {
 
     if (!matches) continue;
 
-    // We have a matching parenthetical at m.index..m.index+m[0].length
     const before = paragraph.slice(0, m.index).trim();
-
-    // Prefer extracting just the definitional phrase nearest the parenthetical:
-    // Take from the last strong delimiter (. ; :) OR a helpful cue word (via/as/in the form of)
     const phrase = extractNearestPhrase(before);
 
-    // If phrase is too short / empty, fallback to last sentence
-    if (phrase && phrase.length >= 20) {
-      return phrase;
-    }
+    if (phrase && phrase.length >= 20) return phrase;
 
     const sent = lastSentence(before);
     return sent || null;
@@ -155,16 +144,13 @@ function extractMeaningFromParentheticalSentence(paragraph, termKey) {
 function extractNearestPhrase(before) {
   const b = before;
 
-  // Cue words (common in LPAs)
   const cues = [" via ", " as ", " in the form of ", " through ", " using "];
-
   let cuePos = -1;
   for (const cue of cues) {
     const pos = b.toLowerCase().lastIndexOf(cue);
     if (pos > cuePos) cuePos = pos;
   }
 
-  // Strong delimiter position
   const strongDelims = [".", ";", ":"];
   let delimPos = -1;
   for (const d of strongDelims) {
@@ -172,18 +158,13 @@ function extractNearestPhrase(before) {
     if (pos > delimPos) delimPos = pos;
   }
 
-  // Start index: prefer the later of (cue end) vs (strong delimiter + 1)
   let start = 0;
   if (delimPos !== -1) start = delimPos + 1;
-  if (cuePos !== -1) start = Math.max(start, cuePos); // include cue word, we'll trim it below
+  if (cuePos !== -1) start = Math.max(start, cuePos);
 
   let candidate = b.slice(start).trim();
-
-  // Trim leading cue words like "via", "as"
   candidate = candidate.replace(/^(via|as|through|using)\s+/i, "");
 
-  // If there's a comma very near the start, drop leading clause fragment
-  // (helps remove "Limited Partners shall be entitled..." etc.)
   const firstComma = candidate.indexOf(",");
   if (firstComma !== -1 && firstComma < 40) {
     candidate = candidate.slice(firstComma + 1).trim();
@@ -192,12 +173,17 @@ function extractNearestPhrase(before) {
   return candidate;
 }
 
+// Lookbehind-free "last sentence"
 function lastSentence(text) {
-  const parts = cleanText(text)
-    .split(/(?<=[.?!])\s+/)
-    .map(s => s.trim())
-    .filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : null;
+  const t = cleanText(text);
+  if (!t) return null;
+
+  // Split on sentence-ending punctuation followed by space/newline
+  const parts = t.split(/[.?!]\s+/).map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return t;
+
+  // We split *without* keeping punctuation; return the last chunk
+  return parts[parts.length - 1];
 }
 
 function truncate(s, maxLen) {
@@ -205,10 +191,6 @@ function truncate(s, maxLen) {
   if (s.length <= maxLen) return s;
   return s.slice(0, maxLen - 1).trim() + "…";
 }
-
-/* ===========================
-   Normalisation helpers
-=========================== */
 
 function cleanText(s) {
   return (s || "")
@@ -236,5 +218,3 @@ function singularize(term) {
   if (term.endsWith("s") && !term.endsWith("ss")) return term.slice(0, -1);
   return term;
 }
-
-main();
