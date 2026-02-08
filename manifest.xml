@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xsi:type="TaskPaneApp">
+
+  <!-- Basic Settings -->
+  <Id>7f3d7f8f-2c2d-4d7a-9b11-4c2f2b6b8f0a</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>ysngh92</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Defined Term Helper"/>
+  <Description DefaultValue="Select a defined term to see its definition in the task pane."/>
+  <SupportUrl DefaultValue="https://ysngh92.github.io/defined-term-helper/"/>
+
+  <!-- Hosts -->
+  <Hosts>
+    <Host Name="Document" />
+  </Hosts>
+
+  <!-- Task pane entry point -->
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://ysngh92.github.io/defined-term-helper/taskpane.html" />
+  </DefaultSettings>
+
+  <!-- Permissions -->
+  <Permissions>ReadWriteDocument</Permissions>
+
+  <!-- Commands -->
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+
+          <FunctionFile resid="Commands.Url"/>
+
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <CustomTab id="DefinedTermHelper.Tab">
+              <Label resid="DefinedTermHelper.Tab.Label"/>
+
+              <Group id="DefinedTermHelper.Group">
+                <Label resid="DefinedTermHelper.Group.Label"/>
+
+                <Control xsi:type="Button" id="DefinedTermHelper.OpenPane">
+                  <Label resid="DefinedTermHelper.Button.Label"/>
+                  <Supertip>
+                    <Title resid="DefinedTermHelper.Button.Title"/>
+                    <Description resid="DefinedTermHelper.Button.Desc"/>
+                  </Supertip>
+
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>DefinedTermHelper.Taskpane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+
+              </Group>
+            </CustomTab>
+          </ExtensionPoint>
+
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+
+    <Resources>
+      <bt:Urls>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://ysngh92.github.io/defined-term-helper/taskpane.html"/>
+        <bt:Url id="Commands.Url" DefaultValue="https://ysngh92.github.io/defined-term-helper/commands.html"/>
+      </bt:Urls>
+
+      <bt:ShortStrings>
+        <bt:String id="DefinedTermHelper.Tab.Label" DefaultValue="Defined Terms"/>
+        <bt:String id="DefinedTermHelper.Group.Label" DefaultValue="Tools"/>
+        <bt:String id="DefinedTermHelper.Button.Label" DefaultValue="Open Helper"/>
+        <bt:String id="DefinedTermHelper.Button.Title" DefaultValue="Defined Term Helper"/>
+      </bt:ShortStrings>
+
+      <bt:LongStrings>
+        <bt:String id="DefinedTermHelper.Button.Desc" DefaultValue="Open the Defined Term Helper task pane."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+
+</OfficeApp>
