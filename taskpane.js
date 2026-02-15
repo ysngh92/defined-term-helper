@@ -9,7 +9,10 @@ Office.onReady(() => {
     Office.EventType.DocumentSelectionChanged,
     onSelectionChanged
   );
+
+  buildGlossary(); // auto-build on open
 });
+
 
 async function buildGlossary() {
   await Word.run(async (context) => {
