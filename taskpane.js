@@ -129,9 +129,21 @@ function extractMeaningFromParentheticalSentence(paragraph, termKey) {
 
     if (!matches) continue;
 
-    const before = paragraph.slice(0, m.index).trim();
-    const phrase = extractNearestPhrase(before);
+    // Prefer structured legal patterns inside the parenthetical
+    const fromParen = extractFromParentheticalItself(inside, termKey);
+    if (fromParen) return fromParen;
 
+    // Otherwise, use the text before the parenthetical
+    const before = cleanText(paragraph.slice(0, m.index).trim());
+
+    // If the parenthetical starts with "any such amount" / "such amount", use a wider slice
+    if (/^(any\s+such\s+amount|such\s+amount|any\s+amount)\b/i.test(inside)) {
+      const wider = extractAmountsReferent(before);
+      if (wider) return wider;
+    }
+
+    // Fallback heuristic
+    const phrase = extractNearestPhrase(before);
     if (phrase && phrase.length >= 20) return phrase;
 
     const sent = lastSentence(before);
@@ -139,6 +151,49 @@ function extractMeaningFromParentheticalSentence(paragraph, termKey) {
   }
 
   return null;
+}
+function extractFromParentheticalItself(parenText, termKey) {
+  const t = cleanText(parenText);
+
+  // Pattern: "<X> being the "Term""
+  // Example: "the amount by which ... being the "Clawback Amount""
+  let m = t.match(/^(.*)\bbeing\s+the\s+"[^"]+"\s*$/i);
+  if (m && m[1]) {
+    const candidate = cleanText(m[1]);
+    if (candidate.length >= 15) return candidate;
+  }
+
+  // Pattern: "<X> being the Term" (no quotes)
+  m = t.match(/^(.*)\bbeing\s+the\s+(.+)\s*$/i);
+  if (m && m[1] && normalizeTerm(m[2] || "").includes(termKey)) {
+    const candidate = cleanText(m[1]);
+    if (candidate.length >= 15) return candidate;
+  }
+
+  return null;
+}
+
+function extractAmountsReferent(beforeText) {
+  // Aim: pull the chunk that defines the "amount(s)" referred to by
+  // "any such amount" / "such amount" parentheticals.
+
+  const b = cleanText(beforeText);
+
+  // Look for the last occurrence of “such amount(s)”
+  const idx = b.toLowerCase().lastIndexOf("such amounts");
+  const idx2 = b.toLowerCase().lastIndexOf("such amount");
+
+  const startIdx = Math.max(idx, idx2);
+  if (startIdx !== -1) {
+    const candidate = b.slice(startIdx).trim();
+    // Remove leading “such amount(s) as” → convert to a more helpful phrase
+    return candidate
+      .replace(/^such\s+amounts?\s+as\s+/i, "amounts ")
+      .replace(/^such\s+amounts?\s+/i, "amounts ");
+  }
+
+  // Otherwise, fall back to last sentence (better than grabbing the tail)
+  return lastSentence(b);
 }
 
 function extractNearestPhrase(before) {
@@ -165,13 +220,9 @@ function extractNearestPhrase(before) {
   let candidate = b.slice(start).trim();
   candidate = candidate.replace(/^(via|as|through|using)\s+/i, "");
 
-  const firstComma = candidate.indexOf(",");
-  if (firstComma !== -1 && firstComma < 40) {
-    candidate = candidate.slice(firstComma + 1).trim();
-  }
-
   return candidate;
 }
+
 
 // Lookbehind-free "last sentence"
 function lastSentence(text) {
