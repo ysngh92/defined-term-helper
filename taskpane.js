@@ -35,13 +35,10 @@ async function buildGlossary() {
   setStatus("Glossary ready ✓");
 }
   
-function setStatus(msg) {
+function (msg) {
   const el = document.getElementById("status");
   if (!el) return;
   el.textContent = msg || "";
-}
-
-  setUI("Glossary built. Now select a term.", "");
 }
 
 async function onSelectionChanged() {
