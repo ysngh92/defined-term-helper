@@ -3,7 +3,8 @@
 let GLOSSARY = null; // { direct: {}, xref: {}, paraTexts: [] }
 
 Office.onReady(() => {
-  document.getElementById("refresh").addEventListener("click", buildGlossary);
+  const refreshBtn = document.getElementById("refresh");
+  if (refreshBtn) refreshBtn.addEventListener("click", buildGlossary);
 
   Office.context.document.addHandlerAsync(
     Office.EventType.DocumentSelectionChanged,
@@ -15,90 +16,98 @@ Office.onReady(() => {
   buildGlossary();
 });
 
-
-
 async function buildGlossary() {
-  setStatus("Scanning document for definitions…");
+  try {
+    setStatus("Scanning document for definitions…");
 
-  await Word.run(async (context) => {
-    const paras = context.document.body.paragraphs;
-    paras.load("items/text");
-    await context.sync();
+    await Word.run(async (context) => {
+      const paras = context.document.body.paragraphs;
+      paras.load("items/text");
+      await context.sync();
 
-    const paraTexts = paras.items.map((p) => p.text || "");
-    const { direct, xref } = extractDefsFromParagraphs(paraTexts);
+      const paraTexts = paras.items.map((p) => p.text || "");
+      const { direct, xref } = extractDefsFromParagraphs(paraTexts);
 
-    GLOSSARY = { direct, xref, paraTexts };
-  });
+      GLOSSARY = { direct, xref, paraTexts };
+    });
 
-  setUI("Ready", "Select a defined term in the document.");
-  setStatus("Glossary ready ✓");
+    setUI("Ready", "Select a defined term in the document.");
+    setStatus("Glossary ready ✓");
+  } catch (e) {
+    console.error("buildGlossary failed", e);
+    setStatus("Error building glossary — check console.");
+  }
 }
-  
-function (msg) {
+
+async function onSelectionChanged() {
+  try {
+    if (!GLOSSARY) {
+      setStatus("Glossary not ready yet…");
+      return;
+    }
+
+    await Word.run(async (context) => {
+      const selection = context.document.getSelection();
+      selection.load("text");
+      await context.sync();
+
+      const rawSelected = cleanText(selection.text || "");
+      const selectedKey = normalizeTerm(rawSelected);
+
+      if (!selectedKey) {
+        setStatus("No term selected.");
+        return;
+      }
+
+      setStatus(`Looking up "${rawSelected}"…`);
+      const candidates = unique([selectedKey, singularize(selectedKey)].filter(Boolean));
+
+      for (const key of candidates) {
+        if (GLOSSARY.direct[key]) {
+          setUI(rawSelected, GLOSSARY.direct[key]);
+          setStatus("Definition found ✓");
+          return;
+        }
+      }
+
+      for (const key of candidates) {
+        if (GLOSSARY.xref[key]) {
+          const clauseRef = GLOSSARY.xref[key].clauseRef;
+          const hit = findEmbeddedDefinitionParagraphAndExtract(GLOSSARY.paraTexts, key);
+
+          if (hit) {
+            setUI(rawSelected, hit);
+            setStatus(`Definition found via clause ${clauseRef} ✓`);
+          } else {
+            setUI(rawSelected, "No embedded definition located.");
+            setStatus(`Cross-reference found (clause ${clauseRef}) but definition not extracted`);
+          }
+          return;
+        }
+      }
+
+      setUI(rawSelected, "No definition found.");
+      setStatus("No definition found.");
+    });
+  } catch (e) {
+    console.error("onSelectionChanged failed", e);
+    setStatus("Error during lookup — check console.");
+  }
+}
+
+function setStatus(msg) {
   const el = document.getElementById("status");
   if (!el) return;
   el.textContent = msg || "";
 }
 
-async function onSelectionChanged() {
-  if (!GLOSSARY) return;
-
-  setStatus("Reading selection…");
-
-  await Word.run(async (context) => {
-    const selection = context.document.getSelection();
-    selection.load("text");
-    await context.sync();
-
-    const rawSelected = cleanText(selection.text || "");
-    const selectedKey = normalizeTerm(rawSelected);
-
-    if (!selectedKey) {
-      setStatus("No term selected.");
-      return;
-    }
-
-    setStatus(`Looking up "${rawSelected}"…`);
-
-    const candidates = unique([selectedKey, singularize(selectedKey)].filter(Boolean));
-
-    // 1) Direct definition
-    for (const key of candidates) {
-      if (GLOSSARY.direct[key]) {
-        setUI(rawSelected, GLOSSARY.direct[key]);
-        setStatus("Definition found ✓");
-        return;
-      }
-    }
-
-    // 2) Cross-reference
-    for (const key of candidates) {
-      if (GLOSSARY.xref[key]) {
-        const clauseRef = GLOSSARY.xref[key].clauseRef;
-        const hit = findEmbeddedDefinitionParagraphAndExtract(GLOSSARY.paraTexts, key);
-
-        if (hit) {
-          setUI(rawSelected, hit);
-          setStatus(`Definition found via clause ${clauseRef} ✓`);
-        } else {
-          setUI(rawSelected, "No embedded definition located.");
-          setStatus(`Cross-reference found (clause ${clauseRef}) but definition not extracted`);
-        }
-        return;
-      }
-    }
-
-    setUI(rawSelected, "No definition found.");
-    setStatus("No definition found.");
-  });
-}
-
-
 function setUI(term, definition) {
-  document.getElementById("term").textContent = term || "—";
-  document.getElementById("definition").textContent = definition || "—";
+  const termEl = document.getElementById("term");
+  const defEl = document.getElementById("definition");
+  if (termEl) termEl.textContent = term || "—";
+  if (defEl) defEl.textContent = definition || "—";
 }
+
 
 /* ===========================
    Helpers (ported from Script Lab)
