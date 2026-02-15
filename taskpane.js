@@ -11,7 +11,6 @@ Office.onReady(() => {
     onSelectionChanged
   );
 
-  // Auto-build glossary when add-in opens
   setStatus("Building glossary…");
   buildGlossary();
 });
@@ -62,6 +61,7 @@ async function onSelectionChanged() {
       setStatus(`Looking up "${rawSelected}"…`);
       const candidates = unique([selectedKey, singularize(selectedKey)].filter(Boolean));
 
+      // 1) Direct definition
       for (const key of candidates) {
         if (GLOSSARY.direct[key]) {
           setUI(rawSelected, GLOSSARY.direct[key]);
@@ -70,6 +70,7 @@ async function onSelectionChanged() {
         }
       }
 
+      // 2) Cross-reference
       for (const key of candidates) {
         if (GLOSSARY.xref[key]) {
           const clauseRef = GLOSSARY.xref[key].clauseRef;
@@ -107,7 +108,6 @@ function setUI(term, definition) {
   if (termEl) termEl.textContent = term || "—";
   if (defEl) defEl.textContent = definition || "—";
 }
-
 
 /* ===========================
    Helpers (ported from Script Lab)
@@ -167,20 +167,16 @@ function extractMeaningFromParentheticalSentence(paragraph, termKey) {
 
     if (!matches) continue;
 
-    // Prefer structured legal patterns inside the parenthetical
     const fromParen = extractFromParentheticalItself(inside, termKey);
     if (fromParen) return fromParen;
 
-    // Otherwise, use the text before the parenthetical
     const before = cleanText(paragraph.slice(0, m.index).trim());
 
-    // If the parenthetical starts with "any such amount" / "such amount", use a wider slice
     if (/^(any\s+such\s+amount|such\s+amount|any\s+amount)\b/i.test(inside)) {
       const wider = extractAmountsReferent(before);
       if (wider) return wider;
     }
 
-    // Fallback heuristic
     const phrase = extractNearestPhrase(before);
     if (phrase && phrase.length >= 20) return phrase;
 
@@ -190,18 +186,18 @@ function extractMeaningFromParentheticalSentence(paragraph, termKey) {
 
   return null;
 }
+
 function extractFromParentheticalItself(parenText, termKey) {
   const t = cleanText(parenText);
 
-  // Pattern: "<X> being the "Term""
-  // Example: "the amount by which ... being the "Clawback Amount""
+  // "<X> being the "Term""
   let m = t.match(/^(.*)\bbeing\s+the\s+"[^"]+"\s*$/i);
   if (m && m[1]) {
     const candidate = cleanText(m[1]);
     if (candidate.length >= 15) return candidate;
   }
 
-  // Pattern: "<X> being the Term" (no quotes)
+  // "<X> being the Term" (no quotes)
   m = t.match(/^(.*)\bbeing\s+the\s+(.+)\s*$/i);
   if (m && m[1] && normalizeTerm(m[2] || "").includes(termKey)) {
     const candidate = cleanText(m[1]);
@@ -212,25 +208,19 @@ function extractFromParentheticalItself(parenText, termKey) {
 }
 
 function extractAmountsReferent(beforeText) {
-  // Aim: pull the chunk that defines the "amount(s)" referred to by
-  // "any such amount" / "such amount" parentheticals.
-
   const b = cleanText(beforeText);
 
-  // Look for the last occurrence of “such amount(s)”
   const idx = b.toLowerCase().lastIndexOf("such amounts");
   const idx2 = b.toLowerCase().lastIndexOf("such amount");
 
   const startIdx = Math.max(idx, idx2);
   if (startIdx !== -1) {
     const candidate = b.slice(startIdx).trim();
-    // Remove leading “such amount(s) as” → convert to a more helpful phrase
     return candidate
       .replace(/^such\s+amounts?\s+as\s+/i, "amounts ")
       .replace(/^such\s+amounts?\s+/i, "amounts ");
   }
 
-  // Otherwise, fall back to last sentence (better than grabbing the tail)
   return lastSentence(b);
 }
 
@@ -261,17 +251,12 @@ function extractNearestPhrase(before) {
   return candidate;
 }
 
-
-// Lookbehind-free "last sentence"
 function lastSentence(text) {
   const t = cleanText(text);
   if (!t) return null;
 
-  // Split on sentence-ending punctuation followed by space/newline
-  const parts = t.split(/[.?!]\s+/).map(s => s.trim()).filter(Boolean);
+  const parts = t.split(/[.?!]\s+/).map((s) => s.trim()).filter(Boolean);
   if (parts.length === 0) return t;
-
-  // We split *without* keeping punctuation; return the last chunk
   return parts[parts.length - 1];
 }
 
