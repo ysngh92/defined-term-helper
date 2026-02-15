@@ -10,11 +10,16 @@ Office.onReady(() => {
     onSelectionChanged
   );
 
-  buildGlossary(); // auto-build on open
+  // Auto-build glossary when add-in opens
+  setStatus("Building glossary…");
+  buildGlossary();
 });
 
 
+
 async function buildGlossary() {
+  setStatus("Scanning document for definitions…");
+
   await Word.run(async (context) => {
     const paras = context.document.body.paragraphs;
     paras.load("items/text");
@@ -26,11 +31,23 @@ async function buildGlossary() {
     GLOSSARY = { direct, xref, paraTexts };
   });
 
+  setUI("Ready", "Select a defined term in the document.");
+  setStatus("Glossary ready ✓");
+}
+  
+function setStatus(msg) {
+  const el = document.getElementById("status");
+  if (!el) return;
+  el.textContent = msg || "";
+}
+
   setUI("Glossary built. Now select a term.", "");
 }
 
 async function onSelectionChanged() {
   if (!GLOSSARY) return;
+
+  setStatus("Reading selection…");
 
   await Word.run(async (context) => {
     const selection = context.document.getSelection();
@@ -39,7 +56,13 @@ async function onSelectionChanged() {
 
     const rawSelected = cleanText(selection.text || "");
     const selectedKey = normalizeTerm(rawSelected);
-    if (!selectedKey) return;
+
+    if (!selectedKey) {
+      setStatus("No term selected.");
+      return;
+    }
+
+    setStatus(`Looking up "${rawSelected}"…`);
 
     const candidates = unique([selectedKey, singularize(selectedKey)].filter(Boolean));
 
@@ -47,27 +70,33 @@ async function onSelectionChanged() {
     for (const key of candidates) {
       if (GLOSSARY.direct[key]) {
         setUI(rawSelected, GLOSSARY.direct[key]);
+        setStatus("Definition found ✓");
         return;
       }
     }
 
-    // 2) Cross-reference: find embedded definition paragraph anywhere
+    // 2) Cross-reference
     for (const key of candidates) {
       if (GLOSSARY.xref[key]) {
         const clauseRef = GLOSSARY.xref[key].clauseRef;
         const hit = findEmbeddedDefinitionParagraphAndExtract(GLOSSARY.paraTexts, key);
 
-        setUI(
-          rawSelected,
-          hit ? hit : `No embedded definition found (cross-ref: clause ${clauseRef}).`
-        );
+        if (hit) {
+          setUI(rawSelected, hit);
+          setStatus(`Definition found via clause ${clauseRef} ✓`);
+        } else {
+          setUI(rawSelected, "No embedded definition located.");
+          setStatus(`Cross-reference found (clause ${clauseRef}) but definition not extracted`);
+        }
         return;
       }
     }
 
     setUI(rawSelected, "No definition found.");
+    setStatus("No definition found.");
   });
 }
+
 
 function setUI(term, definition) {
   document.getElementById("term").textContent = term || "—";
