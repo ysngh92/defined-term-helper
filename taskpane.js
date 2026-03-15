@@ -251,7 +251,7 @@ function findEmbeddedDefinitionParagraphAndExtract(paragraphTexts, termKey, clau
       if (!p.includes("(") || !p.includes(")")) continue;
       const enriched = enrichWithPrecedingContext(p, paragraphTexts, i);
       const extraction = extractMeaningFromParentheticalSentenceForPass(enriched, termKey, quotedPass);
-      if (extraction) return truncate(extraction, 260);
+      if (extraction) return extraction;
     }
   }
 
