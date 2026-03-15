@@ -3,6 +3,7 @@
 let GLOSSARY = null; // { direct: {}, xref: {}, paraTexts: [] }
 
 Office.onReady(() => {
+  console.log("taskpane.js loaded - VERSION 2.0 - No truncation");
   const refreshBtn = document.getElementById("refresh");
   if (refreshBtn) refreshBtn.addEventListener("click", buildGlossary);
 
